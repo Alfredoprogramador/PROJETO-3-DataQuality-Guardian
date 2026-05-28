@@ -1,0 +1,14 @@
+{
+  "name": "dataquality-guardian",
+  "private": true,
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "echo 'Use app-level dev commands'",
+    "build": "echo 'Use app-level build commands'",
+    "test": "echo 'Use app-level test commands'"
+  }
+}

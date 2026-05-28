@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: dq_guardian
+      POSTGRES_USER: dqg
+      # Local development default. Override via environment in non-local contexts.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dqg_local_dev_only}
+    ports:
+      - "5432:5432"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      # Local development defaults. Override via environment in non-local contexts.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_local_dev_only}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
