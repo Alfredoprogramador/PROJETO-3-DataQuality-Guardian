@@ -43,17 +43,12 @@ jobs:
       - name: Run Bandit (SAST)
         run: |
           bandit -r apps/backend/app \
-            --format sarif \
-            --output bandit-results.sarif \
+            --format json \
+            --output bandit-results.json \
             --severity-level medium \
             --confidence-level medium \
             || true
-
-      - name: Upload Bandit SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: bandit-results.sarif
-          category: bandit
+          cat bandit-results.json
 
       - name: Run pip-audit (dependency vulnerabilities)
         run: |
