@@ -7,8 +7,12 @@ on:
 
 permissions:
   contents: read
+  security-events: write   # required for uploading SARIF reports
 
 jobs:
+  # -------------------------------------------------------------------------
+  # Structure validation (original check)
+  # -------------------------------------------------------------------------
   basic-check:
     runs-on: ubuntu-latest
     steps:
@@ -19,3 +23,86 @@ jobs:
           test -d packages
           test -d infra
           test -f README.md
+
+  # -------------------------------------------------------------------------
+  # Python security scanning — Bandit (SAST) + pip-audit (SCA)
+  # -------------------------------------------------------------------------
+  python-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install security tools
+        run: pip install bandit pip-audit
+
+      - name: Run Bandit (SAST)
+        run: |
+          bandit -r apps/backend/app \
+            --format sarif \
+            --output bandit-results.sarif \
+            --severity-level medium \
+            --confidence-level medium \
+            || true
+
+      - name: Upload Bandit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+
+      - name: Run pip-audit (dependency vulnerabilities)
+        run: |
+          pip-audit \
+            --requirement apps/backend/requirements.txt \
+            --format json \
+            --output pip-audit-results.json \
+            || true
+          cat pip-audit-results.json
+
+  # -------------------------------------------------------------------------
+  # Docker image vulnerability scanning — Trivy
+  # -------------------------------------------------------------------------
+  trivy-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend Docker image
+        run: docker build -t dqg-backend:ci apps/backend
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: dqg-backend:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"   # don't fail the build; upload results for review
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+  # -------------------------------------------------------------------------
+  # OPA policy linting — ensure Rego policies are valid
+  # -------------------------------------------------------------------------
+  opa-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OPA
+        run: |
+          curl -fsSL -o /usr/local/bin/opa \
+            https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static
+          chmod +x /usr/local/bin/opa
+
+      - name: Check OPA policies
+        run: opa check infra/opa/policies/
