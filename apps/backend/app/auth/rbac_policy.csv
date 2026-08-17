@@ -1,0 +1,44 @@
+# Casbin RBAC policy for DataQuality Guardian
+# Format: p = role, resource, action  |  g = user_or_role, parent_role
+
+# ---------------------------------------------------------------
+# Role hierarchy
+# ---------------------------------------------------------------
+g, data_steward, analyst
+g, analyst, viewer
+g, admin, data_steward
+
+# ---------------------------------------------------------------
+# Admin — full access
+# ---------------------------------------------------------------
+p, admin, *, *
+
+# ---------------------------------------------------------------
+# Data Steward — manage data assets, run quality checks, write governance
+# ---------------------------------------------------------------
+p, data_steward, datasets, read
+p, data_steward, datasets, write
+p, data_steward, quality_rules, read
+p, data_steward, quality_rules, write
+p, data_steward, governance_policies, read
+p, data_steward, governance_policies, write
+p, data_steward, catalog, read
+p, data_steward, catalog, write
+p, data_steward, lineage, read
+p, data_steward, audit_logs, read
+
+# ---------------------------------------------------------------
+# Analyst — read data assets, run checks, read catalog/lineage
+# ---------------------------------------------------------------
+p, analyst, datasets, read
+p, analyst, quality_rules, read
+p, analyst, quality_rules, execute
+p, analyst, catalog, read
+p, analyst, lineage, read
+
+# ---------------------------------------------------------------
+# Viewer — read-only across all non-sensitive resources
+# ---------------------------------------------------------------
+p, viewer, datasets, read
+p, viewer, catalog, read
+p, viewer, lineage, read

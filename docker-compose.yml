@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dqg_local_dev_only}
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   minio:
     image: minio/minio:latest
@@ -19,3 +21,92 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+
+  # ---------------------------------------------------------------------------
+  # Keycloak — Identity Provider (OIDC/OAuth2/SAML)
+  # ---------------------------------------------------------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-keycloak_local_dev_only}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/dq_guardian
+      KC_DB_USERNAME: dqg
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-dqg_local_dev_only}
+      KC_HOSTNAME: localhost
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+  # ---------------------------------------------------------------------------
+  # HashiCorp Vault — Secrets management
+  # ---------------------------------------------------------------------------
+  vault:
+    image: hashicorp/vault:1.18
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_TOKEN:-vault_local_dev_only}
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "8200:8200"
+    command: vault server -dev
+
+  # ---------------------------------------------------------------------------
+  # OPA — Open Policy Agent
+  # ---------------------------------------------------------------------------
+  opa:
+    image: openpolicyagent/opa:0.70.0
+    command:
+      - run
+      - --server
+      - --log-format=json
+      - /policies
+    ports:
+      - "8181:8181"
+    volumes:
+      - ./infra/opa/policies:/policies:ro
+
+  # ---------------------------------------------------------------------------
+  # Redis — for distributed rate limiting
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_local_dev_only}
+    ports:
+      - "6379:6379"
+
+  # ---------------------------------------------------------------------------
+  # Backend
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://dqg:${POSTGRES_PASSWORD:-dqg_local_dev_only}@postgres:5432/dq_guardian
+      OIDC_ISSUER_URL: http://keycloak:8080/realms/dqg
+      OIDC_CLIENT_ID: dqg-backend
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-changeme}
+      OPA_URL: http://opa:8181
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_TOKEN:-vault_local_dev_only}
+      # Must be overridden in production via Vault / External Secrets
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev_jwt_secret_key_32_chars_minimum!!}
+      AUDIT_HMAC_KEY: ${AUDIT_HMAC_KEY:-dev_audit_hmac_key_32_chars_minimum!}
+      FIELD_ENCRYPTION_KEY_HEX: ${FIELD_ENCRYPTION_KEY_HEX:-0000000000000000000000000000000000000000000000000000000000000000}
+      ALLOWED_ORIGINS: http://localhost:3000
+      RATE_LIMIT_DEFAULT: "100/minute"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - keycloak
+      - opa
+      - vault
+
+volumes:
+  postgres_data:
