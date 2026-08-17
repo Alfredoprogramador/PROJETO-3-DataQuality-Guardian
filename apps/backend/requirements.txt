@@ -13,7 +13,7 @@ pyotp==2.9.0
 webauthn==2.2.0
 
 # RBAC / OPA
-casbin==1.37.1
+casbin==1.37.0
 requests==2.32.3
 
 # Rate limiting
