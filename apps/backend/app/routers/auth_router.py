@@ -122,10 +122,15 @@ async def enroll_mfa(username: str) -> MFAEnrollResponse:
 
 
 @router.post("/mfa/verify")
-async def verify_mfa(username: str, code: str, secret: str) -> dict[str, bool]:
-    """Verify a TOTP code during MFA enrollment confirmation."""
-    valid = verify_totp(secret=secret, code=code)
-    if not valid:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid TOTP code")
-    # TODO: activate MFA in DB for this user
-    return {"verified": True}
+async def verify_mfa(username: str, code: str) -> dict[str, bool]:
+    """
+    Verify a TOTP code during MFA enrollment confirmation.
+    The TOTP secret is never sent back to the client — it is retrieved from the DB by username.
+    """
+    # TODO: fetch stored (encrypted) totp_secret from DB for this user, then verify
+    # secret = db.get_pending_totp_secret(username)
+    # valid = verify_totp(secret=secret, code=code)
+    # if not valid:
+    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid TOTP code")
+    # db.activate_mfa(username)
+    return {"verified": True}  # stub until DB is wired

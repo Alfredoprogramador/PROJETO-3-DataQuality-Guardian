@@ -66,11 +66,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # Secrets management — HashiCorp Vault client (with env-var fallback)
 # ---------------------------------------------------------------------------
 
-def get_secret(key: str) -> str:
+def get_secret(key: str, vault_path: str | None = None, vault_property: str | None = None) -> str:
     """
     Retrieve a secret from HashiCorp Vault if configured,
     otherwise fall back to environment variables.
+
+    Args:
+        key: Environment variable name used as fallback.
+        vault_path: Vault KV path (e.g. "dqg/backend"). Defaults to key.
+        vault_property: Property name within the Vault secret. Defaults to key.
     """
+    path = vault_path or key
+    prop = vault_property or key
     if settings.VAULT_ADDR and settings.VAULT_TOKEN:
         try:
             import hvac  # type: ignore
@@ -78,14 +85,14 @@ def get_secret(key: str) -> str:
             client = hvac.Client(url=settings.VAULT_ADDR, token=settings.VAULT_TOKEN)
             if settings.VAULT_NAMESPACE:
                 client.adapter.namespace = settings.VAULT_NAMESPACE
-            read_response = client.secrets.kv.v2.read_secret_version(path=key)
-            return read_response["data"]["data"][key]
+            read_response = client.secrets.kv.v2.read_secret_version(path=path)
+            return read_response["data"]["data"][prop]
         except Exception:
             # Fall through to env-var fallback
             pass
     value = os.environ.get(key)
     if not value:
-        raise RuntimeError(f"Secret '{key}' not found in Vault or environment")
+        raise RuntimeError(f"Secret '{key}' not found in Vault (path={path}, property={prop}) or environment")
     return value
 
 

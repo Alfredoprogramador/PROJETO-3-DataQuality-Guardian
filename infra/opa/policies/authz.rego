@@ -7,39 +7,31 @@ import rego.v1
 # Default: deny
 default allow := false
 
-# Allow if user has the required role via RBAC
+# Allow if user has the required role via RBAC (non-PII resources only)
 allow if {
+    input.resource_classification != "PII"
     role := input.user.role
     resource := input.resource
     action := input.action
     role_permissions[role][_] == concat(".", [resource, action])
 }
 
-# Allow PII access only for compliance-approved users
+# Allow PII access only when ALL conditions are met:
+#  1. User has compliance_approved attribute
+#  2. User has an elevated role
+#  3. Access is within business hours (UTC 08:00-20:00)
 allow if {
     input.resource_classification == "PII"
     input.user.compliance_approved == true
     input.user.role in {"admin", "data_steward"}
+    _within_business_hours
 }
 
-# Deny PII access outside business hours (UTC 08:00-20:00)
-deny_outside_hours if {
-    input.resource_classification == "PII"
+# Business hours guard (UTC 08:00-20:00)
+_within_business_hours if {
     hour := time.clock(time.now_ns())[0]
-    hour < 8
-}
-
-deny_outside_hours if {
-    input.resource_classification == "PII"
-    hour := time.clock(time.now_ns())[0]
-    hour >= 20
-}
-
-allow if {
-    not deny_outside_hours
-    input.user.role in {"admin", "data_steward"}
-    input.resource_classification == "PII"
-    input.user.compliance_approved == true
+    hour >= 8
+    hour < 20
 }
 
 # Role permission map (mirrors rbac_policy.csv)

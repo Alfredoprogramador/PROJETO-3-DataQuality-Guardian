@@ -49,7 +49,7 @@ e = some(where (p.eft == allow))
 m = g(r.sub, p.sub) && (r.obj == p.obj || p.obj == "*") && (r.act == p.act || p.act == "*")
 """
 
-_POLICY_PATH = Path(__file__).parent / "rbac_policy.csv"
+_POLICY_PATH = Path(__file__).parent / "../auth/rbac_policy.csv"
 
 
 @lru_cache(maxsize=1)
@@ -110,19 +110,17 @@ def require_opa_policy(policy_path: str, build_input: Any = None):
     FastAPI async dependency factory for OPA-based ABAC.
     build_input: optional callable(user, request) -> dict
     """
-    import asyncio
     from fastapi import Request
 
-    def _dep_factory(
+    async def _dep(
         request: Request,
         user: dict[str, Any] = Depends(get_current_user),
-    ):
-        async def _check():
-            inp = build_input(user, request) if build_input else {"user": user}
-            allowed = await evaluate_opa_policy(policy_path, inp)
-            if not allowed:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Policy denied")
-            return user
-        return asyncio.ensure_future(_check())
+    ) -> dict[str, Any]:
+        inp = build_input(user, request) if build_input else {"user": user}
+        allowed = await evaluate_opa_policy(policy_path, inp)
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Policy denied")
+        return user
 
-    return _dep_factory
+    return _dep
+
